@@ -1,0 +1,44 @@
+{
+  "name": "rag",
+  "version": "1.0.0",
+  "main": "server.ts",
+  "scripts": {
+    "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
+    "build": "tsc",
+    "start": "node dist/index.js"
+  },
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "@langchain/community": "^0.3.45",
+    "@langchain/core": "^0.3.57",
+    "@langchain/langgraph": "^0.2.74",
+    "@langchain/openai": "^0.5.11",
+    "@langchain/textsplitters": "^0.1.0",
+    "@supabase/supabase-js": "^2.49.10",
+    "bullmq": "^5.53.2",
+    "cors": "^2.8.5",
+    "csv-parse": "^5.6.0",
+    "d3-dsv": "^2.0.0",
+    "dotenv": "^16.5.0",
+    "express": "^5.1.0",
+    "langchain": "^0.3.27",
+    "mammoth": "^1.9.1",
+    "multer": "^2.0.0",
+    "pdf-parse": "^1.1.1",
+    "pg": "^8.11.3",
+    "winston": "^3.17.0",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.18",
+    "@types/express": "^5.0.2",
+    "@types/multer": "^1.4.12",
+    "@types/node": "^22.15.29",
+    "@types/pdf-parse": "^1.1.5",
+    "@types/pg": "^8.15.4",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.8.3"
+  }
+}
