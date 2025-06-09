@@ -25,12 +25,12 @@ export default function File() {
         .from("qa_database_documents")
         .insert({
           name: Math.random().toString(36).substring(2, 15),
-          cmetadata: {
+          metadata: {
             file_size: "10mb",
             // file_url: "ac25f419-6909-46ec-ba51-fb0522926f56/sample.pdf",
             // file_url: "2fa8df31-6e0b-46a0-bcb0-3ddc369a2223/1.pdf",
-            file_url: "2fa8df31-6e0b-46a0-bcb0-3ddc369a2223/resume.pdf",
-            file_type: "pdf",
+            file_url: "2fa8df31-6e0b-46a0-bcb0-3ddc369a2223/try.docx",
+            file_type: "docx",
           },
         })
         .select("*")
@@ -50,7 +50,7 @@ export default function File() {
         body: JSON.stringify({
           name: data.name,
           id: data.uuid,
-          metadata: data.cmetadata,
+          metadata: data.metadata,
         }),
       });
 
@@ -80,8 +80,7 @@ export default function File() {
                 loading === "ingest"
                   ? "bg-gray-400 cursor-not-allowed"
                   : "bg-blue-600 hover:bg-blue-700"
-              }`}
-            >
+              }`}>
               {loading === "ingest" ? "Uploading..." : "Upload"}
             </Button>
           </div>

@@ -2,6 +2,7 @@
 
 import Chat from "@/components/layouts/Chat";
 import File from "@/components/layouts/File";
+import List from "@/components/layouts/List";
 
 export default function Index() {
   return (
@@ -14,6 +15,7 @@ export default function Index() {
             <strong>Next.js</strong>
           </p>
           <File />
+          <List />
         </div>
         <Chat />
       </div>
