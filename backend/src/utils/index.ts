@@ -129,7 +129,7 @@ export async function processIngestionJob(job: {
     await fs.writeFile(tempFilePath, Buffer.from(await file.arrayBuffer()));
 
     try {
-      await updateDocumentStatus(supabase, id, "splitting");
+      // await updateDocumentStatus(supabase, id, "splitting");
       const rawDocs = await loadDocumentFromPath(
         tempFilePath,
         metadata.file_type
@@ -141,13 +141,13 @@ export async function processIngestionJob(job: {
       });
       const docs = await splitter.splitDocuments(rawDocs);
 
-      await updateDocumentStatus(supabase, id, "embedding");
+      // await updateDocumentStatus(supabase, id, "embedding");
       const pgVectorStore = await initializeCustomPGVectorStore(
         name,
         id,
         metadata
       );
-      await updateDocumentStatus(supabase, id, "embedding");
+      // await updateDocumentStatus(supabase, id, "indexing");
 
       await pgVectorStore.addDocuments(
         docs.map((doc) => ({
