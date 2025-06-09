@@ -65,13 +65,16 @@ export default function Chat() {
               console.warn("No active session");
               return;
             }
+            console.log(session.user.id);
 
             handleSubmit(e, {
               headers: {
                 authorization: `Bearer ${session.access_token}`,
               },
               body: {
-                input, // Only send the question text
+                input,
+                userId: session.user.id,
+                category: "chat", // TODO: add category
               },
             });
           }}>
