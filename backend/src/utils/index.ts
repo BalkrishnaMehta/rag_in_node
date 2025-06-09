@@ -1,6 +1,6 @@
-import express, { Request, Response } from "express";
-import cors from "cors";
-import dotenv from "dotenv";
+import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters";
+import { supabase } from "../service/supabase";
+import { Metadata } from "../types";
 import { createClient } from "@supabase/supabase-js";
 import { promises as fs } from "fs";
 import path from "path";
@@ -12,78 +12,14 @@ import { DocxLoader } from "@langchain/community/document_loaders/fs/docx";
 import { CSVLoader } from "@langchain/community/document_loaders/fs/csv";
 import { TextLoader } from "langchain/document_loaders/fs/text";
 import { Document } from "@langchain/core/documents";
-import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters";
-import { Queue, Worker, QueueEvents } from "bullmq";
 import { PGVectorStore } from "@langchain/community/vectorstores/pgvector";
 import { randomUUID } from "crypto";
+import { embeddings } from "../service/openai";
 
+import dotenv from "dotenv";
 dotenv.config();
 
-interface Metadata {
-  file_type: string;
-  file_url: string;
-  file_size: string;
-}
-
-const REQUIRED_ENV_VARS = [
-  "OPENAI_API_KEY",
-  "SUPABASE_URL",
-  "SUPABASE_DB_URL",
-  "SUPABASE_SERVICE_ROLE_KEY",
-  "REDIS_URL",
-];
-
-for (const key of REQUIRED_ENV_VARS) {
-  if (!process.env[key]) {
-    throw new Error(`Missing environment variable: ${key}`);
-  }
-}
-
-const redisUrl = new URL(process.env.REDIS_URL!);
-const redisConnection = {
-  host: redisUrl.hostname || "localhost",
-  port: parseInt(redisUrl.port || "6379"),
-  password: redisUrl.password || undefined,
-};
-
-const app = express();
-app.use(cors());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-const port = process.env.PORT || 8000;
-
-const supabase = createClient(
-  process.env.SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
-
-const embeddings = new OpenAIEmbeddings({
-  apiKey: process.env.OPENAI_API_KEY,
-  model: "text-embedding-3-small",
-});
-
-const ingestQueue = new Queue("document-ingestion", {
-  connection: redisConnection,
-  defaultJobOptions: {
-    removeOnComplete: true,
-    removeOnFail: true,
-    attempts: 3,
-  },
-});
-
-const queueEvents = new QueueEvents("document-ingestion", {
-  connection: redisConnection,
-});
-
-queueEvents.on("completed", ({ jobId }) => {
-  console.log(`Ingestion job ${jobId} completed`);
-});
-
-queueEvents.on("failed", ({ jobId, failedReason }) => {
-  console.error(`Ingestion job ${jobId} failed: ${failedReason}`);
-});
-
-async function updateDocumentStatus(
+export async function updateDocumentStatus(
   supabase: any,
   documentId: string,
   status: string
@@ -96,7 +32,7 @@ async function updateDocumentStatus(
     throw new Error(`Failed to update status to ${status}: ${error.message}`);
 }
 
-async function loadXLSXLocally(filePath: string): Promise<Document[]> {
+export async function loadXLSXLocally(filePath: string): Promise<Document[]> {
   const workbook = XLSX.readFile(filePath);
   const docs: Document[] = [];
 
@@ -116,7 +52,7 @@ async function loadXLSXLocally(filePath: string): Promise<Document[]> {
   return docs;
 }
 
-async function loadDocumentFromPath(
+export async function loadDocumentFromPath(
   filePath: string,
   ext: string
 ): Promise<Document[]> {
@@ -134,7 +70,7 @@ async function loadDocumentFromPath(
   return loader();
 }
 
-async function initializeCustomPGVectorStore(
+export async function initializeCustomPGVectorStore(
   name: string,
   id: string,
   metadata: Metadata
@@ -162,7 +98,7 @@ async function initializeCustomPGVectorStore(
   });
 }
 
-async function processIngestionJob(job: {
+export async function processIngestionJob(job: {
   data: { name: string; id: string; metadata: Metadata };
 }): Promise<void> {
   const { name, id, metadata } = job.data;
@@ -206,12 +142,12 @@ async function processIngestionJob(job: {
       const docs = await splitter.splitDocuments(rawDocs);
 
       await updateDocumentStatus(supabase, id, "embedding");
-
       const pgVectorStore = await initializeCustomPGVectorStore(
         name,
         id,
         metadata
       );
+      await updateDocumentStatus(supabase, id, "embedding");
 
       await pgVectorStore.addDocuments(
         docs.map((doc) => ({
@@ -222,6 +158,7 @@ async function processIngestionJob(job: {
           },
         }))
       );
+      await updateDocumentStatus(supabase, id, "ready");
 
       // const { error: deleteError } = await supabase
       //   .from("qa_database_documents")
@@ -229,18 +166,18 @@ async function processIngestionJob(job: {
       //   .eq("uuid", id);
       // if (deleteError)
       //   throw new Error(`Failed to delete document: ${deleteError.message}`);
-
-      const { data, error } = await supabase
-        .from("qa_database_documents")
-        .update({ status: "ready" })
-        .eq("cmetadata->>id", id)
-        .select()
-        .single();
-      if (error) {
-        throw new Error(`Failed to update document: ${error.message}`);
-      }
-      console.log("error", error);
-      console.log(`Ingestion ${id} completed`);
+      console.log("🚀 ~ index.ts:181 ~ id:", id);
+      //   try {
+      //     await supabase
+      //       .from("qa_database_documents")
+      //       .update({ status: "ready" })
+      //       .eq("cmetadata->>id", id)
+      //       .select()
+      //       .single();
+      //     console.log(`Ingestion ${id} completed`);
+      //   } catch (error) {
+      //     console.log("🚀 ~ index.ts:179 ~ error:", error);
+      //   }
       await pgVectorStore.end();
     } finally {
       await fs.unlink(tempFilePath).catch(() => {});
@@ -250,63 +187,3 @@ async function processIngestionJob(job: {
     throw err;
   }
 }
-
-const worker = new Worker("document-ingestion", processIngestionJob, {
-  connection: redisConnection,
-  concurrency: 1,
-});
-
-worker.on("error", (error) => {
-  console.error("Worker error:", error.message);
-});
-
-app.post("/ingest", async (req: Request, res: Response): Promise<void> => {
-  try {
-    const {
-      name,
-      id,
-      metadata,
-    }: { name: string; id: string; metadata: Metadata } = req.body;
-
-    if (
-      !name ||
-      !id ||
-      !metadata ||
-      !metadata.file_type ||
-      !metadata.file_url ||
-      !metadata.file_size
-    ) {
-      throw new Error("Missing required fields: id, metadata");
-    }
-
-    await updateDocumentStatus(supabase, id, "queued");
-    await ingestQueue.add(
-      "ingest",
-      {
-        name,
-        id,
-        metadata,
-      },
-      {
-        jobId: id,
-      }
-    );
-
-    res.json({ message: "Ingestion job queued successfully" });
-  } catch (err: any) {
-    res
-      .status(500)
-      .json({ error: `Failed to queue ingestion: ${err.message}` });
-  }
-});
-
-process.on("SIGTERM", async () => {
-  console.log("Shutting down server...");
-  await worker.close();
-  await ingestQueue.close();
-  process.exit(0);
-});
-
-app.listen(port, () => {
-  console.log(`Server running on http://localhost:${port}`);
-});
