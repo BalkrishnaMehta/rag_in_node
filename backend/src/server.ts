@@ -39,6 +39,9 @@ app.post("/ingest", async (req: Request, res: Response): Promise<void> => {
       throw new Error("Missing required fields: id, metadata");
     }
 
+    // if previous chunks exists delete for retry mechanisms
+    await supabase.from("qa_database_chunks").delete().eq("collection_id", id);
+
     await updateDocumentStatus(supabase, id, "queued");
     await ingestQueue.add(
       "ingest",
