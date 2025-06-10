@@ -1,24 +1,22 @@
 import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters";
 import { supabase } from "../service/supabase";
 import { Metadata } from "../types";
-import { createClient } from "@supabase/supabase-js";
 import { promises as fs } from "fs";
 import path from "path";
 import os from "os";
 import * as XLSX from "xlsx";
-import { OpenAIEmbeddings } from "@langchain/openai";
 import { PDFLoader } from "@langchain/community/document_loaders/fs/pdf";
 import { DocxLoader } from "@langchain/community/document_loaders/fs/docx";
 import { CSVLoader } from "@langchain/community/document_loaders/fs/csv";
 import { TextLoader } from "langchain/document_loaders/fs/text";
 import { Document } from "@langchain/core/documents";
 import { PGVectorStore } from "@langchain/community/vectorstores/pgvector";
-import { randomUUID } from "crypto";
 import { embeddings } from "../service/openai";
 
 import dotenv from "dotenv";
 dotenv.config();
-const STORAGE_BUCKET = process.env.SUPABASE_BUCKET!; // Replace with your actual bucket name // Replace with your actual bucket name
+const STORAGE_BUCKET = process.env.SUPABASE_BUCKET!;
+
 export async function updateDocumentStatus(
   supabase: any,
   documentId: string,
@@ -40,12 +38,25 @@ export async function loadXLSXLocally(filePath: string): Promise<Document[]> {
     const worksheet = workbook.Sheets[sheetName];
     const jsonData = XLSX.utils.sheet_to_json(worksheet, {
       header: 1,
+      defval: "",
     }) as unknown[][];
+
+    const headers = jsonData[0] as string[];
     const content = jsonData
-      .map((row) => (row as any[]).join(" | "))
+      .map((row, index) =>
+        index === 0 ? (row as any[]).join(" | ") : (row as any[]).join(" | ")
+      )
       .join("\n");
+
     docs.push(
-      new Document({ pageContent: content, metadata: { sheet: sheetName } })
+      new Document({
+        pageContent: content,
+        metadata: {
+          sheet: sheetName,
+          rowCount: jsonData.length - 1,
+          headers: headers.join(", "),
+        },
+      })
     );
   }
 
@@ -63,9 +74,10 @@ export async function loadDocumentFromPath(
     csv: () => new CSVLoader(filePath).load(),
     docx: () => new DocxLoader(filePath).load(),
     xls: () => loadXLSXLocally(filePath),
+    xlsx: () => loadXLSXLocally(filePath),
   };
 
-  const loader = loaders[ext];
+  const loader = loaders[ext.toLowerCase()];
   if (!loader) throw new Error(`Unsupported file extension: ${ext}`);
   return loader();
 }
@@ -106,15 +118,6 @@ export async function processIngestionJob(job: {
   try {
     await updateDocumentStatus(supabase, id, "processing");
 
-    // const { data, error } = await supabase
-    //   .from("qa_database_documents")
-    //   .select("uuid")
-    //   .eq("uuid", id)
-    //   .single();
-    // if (error || !data) {
-    //   throw new Error(`Document ${id} not found in qa_database_documents`);
-    // }
-
     const { data: file, error: downloadError } = await supabase.storage
       .from(STORAGE_BUCKET)
       .download(metadata.file_url);
@@ -129,7 +132,6 @@ export async function processIngestionJob(job: {
     await fs.writeFile(tempFilePath, Buffer.from(await file.arrayBuffer()));
 
     try {
-      // await updateDocumentStatus(supabase, id, "splitting");
       const rawDocs = await loadDocumentFromPath(
         tempFilePath,
         metadata.file_type
@@ -141,13 +143,11 @@ export async function processIngestionJob(job: {
       });
       const docs = await splitter.splitDocuments(rawDocs);
 
-      // await updateDocumentStatus(supabase, id, "embedding");
       const pgVectorStore = await initializeCustomPGVectorStore(
         name,
         id,
         metadata
       );
-      // await updateDocumentStatus(supabase, id, "indexing");
 
       await pgVectorStore.addDocuments(
         docs.map((doc) => ({
@@ -160,24 +160,6 @@ export async function processIngestionJob(job: {
       );
       await updateDocumentStatus(supabase, id, "ready");
 
-      // const { error: deleteError } = await supabase
-      //   .from("qa_database_documents")
-      //   .delete()
-      //   .eq("uuid", id);
-      // if (deleteError)
-      //   throw new Error(`Failed to delete document: ${deleteError.message}`);
-      console.log("🚀 ~ index.ts:181 ~ id:", id);
-      //   try {
-      //     await supabase
-      //       .from("qa_database_documents")
-      //       .update({ status: "ready" })
-      //       .eq("cmetadata->>id", id)
-      //       .select()
-      //       .single();
-      //     console.log(`Ingestion ${id} completed`);
-      //   } catch (error) {
-      //     console.log("🚀 ~ index.ts:179 ~ error:", error);
-      //   }
       await pgVectorStore.end();
     } finally {
       await fs.unlink(tempFilePath).catch(() => {});
