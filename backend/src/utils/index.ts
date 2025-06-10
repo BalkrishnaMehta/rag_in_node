@@ -18,7 +18,7 @@ import { embeddings } from "../service/openai";
 
 import dotenv from "dotenv";
 dotenv.config();
-
+const STORAGE_BUCKET = process.env.SUPABASE_BUCKET!; // Replace with your actual bucket name // Replace with your actual bucket name
 export async function updateDocumentStatus(
   supabase: any,
   documentId: string,
@@ -116,7 +116,7 @@ export async function processIngestionJob(job: {
     // }
 
     const { data: file, error: downloadError } = await supabase.storage
-      .from("files")
+      .from(STORAGE_BUCKET)
       .download(metadata.file_url);
     if (downloadError) {
       throw new Error(`Failed to download file: ${downloadError.message}`);
