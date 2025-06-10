@@ -5,9 +5,33 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
+import { toast } from "sonner";
+import { useEffect, useState } from "react";
 
 export default function Chat() {
   const supabase = createClientComponentClient();
+  const [userSession, setUserSession] = useState<string | null>(null);
+  useEffect(() => {
+    async function initializeAuth() {
+      try {
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email: "21amtics434@gmail.com",
+          password: "Qwer@1234",
+        });
+
+        if (error) {
+          toast.error("Authentication failed: " + error.message);
+          return;
+        }
+
+        setUserSession(data.session.access_token);
+      } catch (err: any) {
+        toast.error("Unexpected error during authentication: " + err.message);
+      }
+    }
+
+    initializeAuth();
+  }, [supabase]);
 
   const { messages, input, handleInputChange, handleSubmit } = useChat({
     api: process.env.NEXT_PUBLIC_SUPABASE_URL + "/functions/v1/chat",
@@ -57,23 +81,13 @@ export default function Chat() {
           onSubmit={async (e) => {
             e.preventDefault();
 
-            const {
-              data: { session },
-            } = await supabase.auth.getSession();
-
-            if (!session) {
-              console.warn("No active session");
-              return;
-            }
-            console.log(session.user.id);
-
             handleSubmit(e, {
               headers: {
-                authorization: `Bearer ${session.access_token}`,
+                authorization: `Bearer ${userSession}`,
               },
               body: {
                 input,
-                userId: session.user.id,
+                userId: userSession,
                 category: "chat", // TODO: add category
               },
             });
