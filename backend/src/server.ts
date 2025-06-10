@@ -63,7 +63,7 @@ app.post("/ingest", async (req: Request, res: Response): Promise<void> => {
   }
 });
 
-app.get("health-check", async (req: Request, res: Response): Promise<void> => {
+app.get("/health-check", async (req: Request, res: Response): Promise<void> => {
   res.status(200).send("Server is up");
 });
 process.on("SIGTERM", async () => {
